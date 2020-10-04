@@ -1,0 +1,124 @@
+#define SENSOR  4 //D2(water flow)
+#include "DHT.h"        // including the library of DHT11 temperature and humidity sensor
+#define DHTTYPE DHT11   // DHT 11
+#define dht_dpin 0 //D3
+#include <Servo.h>
+#include <Wire.h>
+#include "DHT.h"
+#include <LiquidCrystal_I2C.h>
+#include <ESP8266WiFi.h>
+#include <WiFiClient.h>
+#include <ESP8266WebServer.h>
+#include <ESP8266HTTPClient.h>
+ 
+long currentMillis = 0;
+long previousMillis = 0;
+int interval = 1000;
+boolean ledState = LOW;
+float calibrationFactor = 4.5;
+volatile byte pulseCount;
+byte pulse1Sec = 0;
+float flowRate;
+unsigned int flowMilliLitres;
+unsigned long totalMilliLitres;
+const int trigPin =16 ;  //D0
+const int echoPin =5 ;  //D1
+long duration;
+int distance;
+DHT dht(dht_dpin, DHTTYPE);
+Servo servo;
+void IRAM_ATTR pulseCounter()
+{
+  pulseCount++;
+}
+LiquidCrystal_I2C lcd(0x27, 16, 4);
+//const char *ssid = "IOTLAB";  //ENTER YOUR WIFI SETTINGS
+//const char *password = "iot@@bit";
+//
+//String humi, temp, postData,water,used,flow;
+//const char *host = "10.10.110.2";
+void setup(){
+  Serial.begin(9600);
+  pinMode(SENSOR, INPUT_PULLUP);
+  pulseCount = 0;
+  flowRate = 0.0;
+  flowMilliLitres = 0;
+  totalMilliLitres = 0;
+  previousMillis = 0;
+  Wire.begin(D5, D6);
+  attachInterrupt(digitalPinToInterrupt(SENSOR), pulseCounter, FALLING);
+  pinMode(trigPin, OUTPUT); // Sets the trigPin as an Output
+  pinMode(echoPin, INPUT);
+   pinMode(D7, OUTPUT); // Set buzzer - pin 9 as an output
+  dht.begin();
+  lcd.begin();
+  lcd.home();
+  //If connection successful show IP address in serial monitor
+//lcd.print("Hello, NodeMCU");
+  Serial.println("Humidity and temperature\n\n");
+  servo.attach(2); //D4
+  servo.write(0);
+  delay(1000);
+}
+void loop()
+{
+digitalWrite(trigPin, LOW);
+delayMicroseconds(2);
+digitalWrite(trigPin, HIGH);
+delayMicroseconds(10);
+digitalWrite(trigPin, LOW);
+duration = pulseIn(echoPin, HIGH);
+distance= duration*0.034/2;
+ String d =String(distance);
+
+ 
+if (distance < 10 )d = "0"+d;
+if(distance <5){
+  servo.write(0);
+  tone(D7, 1000); // Send 1KHz sound signal...
+  delay(1000);        // ...for 1 sec
+  noTone(D7);     // Stop sound...
+  delay(1000);        // ...for 1sec
+}
+else servo.write(50);
+  currentMillis = millis();
+  if (currentMillis - previousMillis > interval) {
+    pulse1Sec = pulseCount;
+    pulseCount = 0;
+    flowRate = ((1000.0 / (millis() - previousMillis)) * pulse1Sec) / calibrationFactor;
+    previousMillis = millis();
+    flowMilliLitres = (flowRate / 60) * 1000;
+    totalMilliLitres += flowMilliLitres;
+    Serial.print("Flow rate: ");
+    Serial.print(int(flowRate));  // Print the integer part of the variable
+    Serial.print("L/min");
+    Serial.print("\t");       // Print tab space
+    Serial.print("Output Liquid Quantity: ");
+    Serial.print(totalMilliLitres);
+    Serial.print("mL / ");
+    Serial.print(totalMilliLitres / 1000);
+    Serial.println("L");
+  }
+    int h = dht.readHumidity();
+    int t = dht.readTemperature();
+    String r = String(h);        
+    Serial.print("Current humidity = ");
+    Serial.print(h);
+    Serial.print("%  ");
+    Serial.print("temperature = ");
+    Serial.print(t);
+    Serial.println("C  ");
+String flow = String( flowMilliLitres);  
+lcd.setCursor(0,0);
+lcd.print("temp:"+String(t));
+lcd.setCursor(0,1);
+lcd.print("flow:"+ flow+"   "+"humi:"+r);
+lcd.setCursor(8,0);
+ lcd.print("dist:"+d);
+//lcd.setCursor(9,0);
+//lcd.print(t);
+//lcd.setCursor(1,0);
+//lcd.print("humidity"+r);
+//  delay(2000);
+}
+
